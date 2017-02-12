@@ -34,7 +34,7 @@ typedef struct forth_s {
 
 #define RETURN      { IP = (cell *) RPOP; return; }
 
-static void forth_dump(const forth_t *f);
+void forth_dump(const forth_t *f);
 
 static void DUP_ (forth_t *f) { --PSP; TOP = PSP[1]; RETURN }
 static void DROP_(forth_t *f) { ++PSP; RETURN }

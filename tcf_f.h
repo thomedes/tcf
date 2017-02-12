@@ -10,9 +10,11 @@ typedef void (forth_fn)(struct forth_s *);
 
 forth_fn do_colon;
 
-extern const cell
-    ADD[],
-    DUP[],
+extern const cell ADD[],
+  SUB[], MUL[], DIV[], MOD[],
+  DUP[], DROP[], SWAP[], OVER[],
+  LIT[],
+  EMIT[], KEY[],
     LAST_C_WORD[],
     LAST_FTH_WORD[];
 
@@ -20,6 +22,6 @@ extern const cell
 #define _     ), (cell) (2 +
 #define __    ), 0 }
 #define cw(p,cn,fn) const cell cn[] = { (cell) (p), (cell) fn, (cell) &cn##_ }
-#define fw(p,cn,fn) static const cell cn[] = { (cell) (p), (cell) fn, ((cell) &do_colon _
+#define fw(p,cn,fn) const cell cn[] = { (cell) (p), (cell) fn, ((cell) &do_colon _
 
 #endif                         /* TCF_F_H__ */

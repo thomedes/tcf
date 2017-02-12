@@ -2,6 +2,11 @@ OUTPUT := output/
 
 all: $(OUTPUT)tcf
 
+PHONY: tags
+
+tags:
+	etags *.[ch]
+
 TCF_SRC := tcf.c tcf_f.c
 
 -include $(OUTPUT)tcf.d
