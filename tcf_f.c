@@ -8,8 +8,8 @@ fw(LAST_C_WORD, DOUBLE,     "DOUBLE"    ) /* A -- 2*A */
 
 /* Single-length */
 
-fw(      ,      DIVMOD,     "/MOD"      ) DIV __;
-fw(DOUBLE,      MULDIV,     "*/"        ) ROT _ ROT _ MUL _ DIV __;
+fw(DOUBLE,      DIVMOD,     "/MOD"      ) DIV __;
+fw(DIVMOD,      MULDIV,     "*/"        ) ROT _ ROT _ MUL _ DIV __;
 fw(MULDIV,      MULDIVMOD,  "*/MOD"     ) ROT _ ROT _ MUL _ DIVMOD __;
 fw(MULDIVMOD,   UMUL,       "U*"        ) ROT _ ROT _ MUL _ DIVMOD __;
 fw(UMUL,        UDIVMOD,    "U/MOD"     ) ROT _ ROT _ MUL _ DIVMOD __;

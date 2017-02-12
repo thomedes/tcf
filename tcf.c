@@ -66,7 +66,7 @@ void do_colon(forth_t *f)
     }
 }
 
-static void word_dump(cell *code)
+void word_dump(cell *code)
 {
     int i;
 
@@ -84,7 +84,7 @@ static void word_dump(cell *code)
     printf(";\n");
 }
 
-static void forth_dump(const forth_t *f)
+void forth_dump(const forth_t *f)
 {
     printf("f: { IP: %p - %20ld, PSP: %20ld, RSP: %20ld }\n",
            (void *) f->ip, (long) (f->ip  - f->mem),
@@ -114,7 +114,7 @@ cw(OVER,    LIT,    "LIT"   );/* -- [IP] */
 cw(ADD,     EMIT,   "EMIT"   );/* A -- */
 cw(EMIT,    KEY,    "KEY"    );/* -- A */
 
-const cell LAST_C_WORD[] = { KEY, (cell) "" };
+const cell LAST_C_WORD[] = { (cell) KEY, (cell) "" };
 
 const cell * const last_c_word = KEY;
 

@@ -1,4 +1,11 @@
-all: tcf
+OUTPUT := output/
 
-tcf: tcf.c tcf_f.c tcf_f.h
-	gcc -Wall tcf.c tcf_f.c -o $@
+all: $(OUTPUT)tcf
+
+TCF_SRC := tcf.c tcf_f.c
+
+-include $(OUTPUT)tcf.d
+
+$(OUTPUT)tcf: $(TCF_SRC)
+	mkdir -p $(OUTPUT)
+	gcc -Wall $(TCF_SRC) -MMD -MF $(@).d -o $@
