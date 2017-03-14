@@ -2,15 +2,20 @@ OUTPUT := output/
 
 all: $(OUTPUT)tcf
 
-PHONY: tags
+PHONY: tags clean
 
 tags:
 	etags *.[ch]
 
-TCF_SRC := tcf.c tcf_f.c
+clean:
+	$(RM) -r $(OUTPUT)
 
 -include $(OUTPUT)tcf.d
 
-$(OUTPUT)tcf: $(TCF_SRC)
+$(OUTPUT)tcf-rom.c: tcf.fth fth2c
 	mkdir -p $(OUTPUT)
-	gcc -Wall $(TCF_SRC) -MMD -MF $(@).d -o $@
+	./fth2c $< > $@
+
+$(OUTPUT)tcf: tcf.c $(OUTPUT)tcf-rom.c
+	mkdir -p $(OUTPUT)
+	gcc -std=c89 -Wall -Wextra -Werror $< -MMD -MF $(@).d -o $@

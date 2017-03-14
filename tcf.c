@@ -1,8 +1,16 @@
-#include "tcf_f.h"
+#include "tcf.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#define l_    LIT ), (cell) (
+#define _     ), (cell) (2 +
+#define __    ), 0 }
+#define cw(p,cn,fn) const cell cn[] = { (cell) (p), (cell) fn, (cell) &cn##_ }
+#define fw(p,cn,fn) const cell cn[] = { (cell) (p), (cell) fn, ((cell) &do_colon _
+#define C(x) ((cell) (x))
+#define CP(x) ((cell*) (x))
 
 typedef struct sys_s {
     int     (*key)(void);
@@ -36,45 +44,63 @@ typedef struct forth_s {
 
 void forth_dump(const forth_t *f);
 
-static void DUP_ (forth_t *f) { --PSP; TOP = PSP[1]; RETURN }
-static void DROP_(forth_t *f) { ++PSP; RETURN }
-static void SWAP_(forth_t *f) { cell c = TOP; TOP = PSP[1]; PSP[1] = c; RETURN }
-static void OVER_(forth_t *f) { --PSP; TOP = PSP[2]; RETURN }
+static void dup     (forth_t *f) { --PSP; TOP = PSP[1]; RETURN }
+static void drop    (forth_t *f) { ++PSP; RETURN }
+static void swap    (forth_t *f) { cell c = TOP; TOP = PSP[1]; PSP[1] = c; RETURN }
+static void over    (forth_t *f) { --PSP; TOP = PSP[2]; RETURN }
 
-static void LIT_ (forth_t *f) { IP = (cell *) RPOP; PUSH(*IP++); }
+static void literal (forth_t *f) { IP = (cell *) RPOP; PUSH(*IP++); }
 
-static void ADD_ (forth_t *f) { PSP[1] += TOP; ++PSP; RETURN }
-static void SUB_ (forth_t *f) { PSP[1] -= TOP; ++PSP; RETURN }
-static void MUL_ (forth_t *f) { PSP[1] *= TOP; ++PSP; RETURN }
-static void DIV_ (forth_t *f) { PSP[1] /= TOP; ++PSP; RETURN }
-static void MOD_ (forth_t *f) { PSP[1] %= TOP; ++PSP; RETURN }
+static void add     (forth_t *f) { PSP[1] += TOP; ++PSP; RETURN }
+static void sub     (forth_t *f) { PSP[1] -= TOP; ++PSP; RETURN }
+static void mul     (forth_t *f) { PSP[1] *= TOP; ++PSP; RETURN }
+static void div_    (forth_t *f) { PSP[1] /= TOP; ++PSP; RETURN }
+static void mod     (forth_t *f) { PSP[1] %= TOP; ++PSP; RETURN }
 
-static void EMIT_(forth_t *f) { (*f->sys.emit)(POP); RETURN }
-static void KEY_ (forth_t *f) { PUSH((*f->sys.key)()); RETURN }
+static void emit    (forth_t *f) { (*f->sys.emit)(POP); RETURN }
+static void key     (forth_t *f) { PUSH((*f->sys.key)()); RETURN }
 
-static const char *word_name(cell *code) { return (const char *) (code[-1]); }
+static void eq      (forth_t *f) { PSP[1] = PSP[1] == TOP ? -1 : 0; RETURN }
+
+static void cells   (forth_t *f) { TOP *= sizeof (cell); RETURN }
+
+
+static const char *word_name(const cell *code) {
+    return (const char *) (code[-1]);
+}
 
 void do_colon(forth_t *f)
 {
-//     printf("do_colon %s\n", word_name(IP - 1));
+    /* printf("do_colon(%p)\n", f); */
+    /* fflush(stdout); */
+#if 1
+    /* printf("do_colon %s\n", word_name(IP - 1)); */
     while (*IP) {
         RPUSH(IP + 1);
         IP = (cell *) *IP;
-//         printf("--> %s\n", word_name(IP));
+        /* printf("--> %s\n", word_name(IP)); */
 
         (**(forth_fn *) *IP++)(f);
     }
+#endif
 }
 
-void word_dump(cell *code)
+#include "output/tcf-rom.c"
+
+
+void word_dump(const cell *code)
 {
     int i;
 
+    /* printf(": %s\n", (const char *) code[-1]); fflush(stdout); */
     printf(": %s ", word_name(code));
 
     if (*code == (cell) &do_colon) {
         for (i = 1; code[i] != 0; ++i) {
-            if (*(cell *) code[i] == (cell) &LIT_) {
+            /* printf("%d - %ld, %ld\n", i, code[i], (long unsigned) literal); */
+
+            if (*(cell *) code[i] == (cell) &literal) {
+                /* printf("LIT "); fflush(stdout); */
                 printf("%d ", (int) code[++i]);
             } else {
                 printf("%s ", word_name((cell *) code[i]));
@@ -90,45 +116,49 @@ void forth_dump(const forth_t *f)
            (void *) f->ip, (long) (f->ip  - f->mem),
            (long) (f->psp - f->mem),
            (long) (f->rsp - f->mem));
-//     word_dump(f->ip);
+    /* word_dump(f->ip); */
 }
 
-/* ARITHMETIC */
+static void myemit(int c) { putchar(c); }
 
-/* Single-length */
+static void check(void) {
+#if 0
+    int i;
 
-cw(0,       ADD,    "+"   );/* A B -- A+B */
-cw(ADD,     SUB,    "-"   );/* A B -- A+B */
-cw(SUB,     MUL,    "*"   );/* A B -- A+B */
-cw(MUL,     DIV,    "/"   );/* A B -- A+B */
-cw(DIV,     MOD,    "MOD" );/* A B -- A/B A%B */
+    for (i = 0; i < 6; ++i) {
+        printf("%ld.%d: ",
+               CP(last_forth_rom_word) + i - forth_rom,
+               i);
+        switch (i) {
+        case 0:
+            printf("%ld", CP(CP(last_forth_rom_word)[i]) - forth_rom);
+            break;
+        case 1:
+            printf("%s", (char *) (CP(last_forth_rom_word)[i]));
+            break;
+        case 2:
+            printf("%p", (void *) (CP(last_forth_rom_word)[i]));
+            break;
+        default:
+            printf(" %ld", CP(last_forth_rom_word)[i]);
+        }
+        printf("\n");
+    }
+#endif
+}
 
-cw(0,       DUP,    "DUP"   );/* A -- A A */
-cw(DUP,     DROP,   "DROP"  );/* A -- */
-cw(DROP,    SWAP,   "SWAP"  );/* A B -- B A */
-cw(SWAP,    OVER,   "OVER"  );/* A B -- A B A */
-
-cw(OVER,    LIT,    "LIT"   );/* -- [IP] */
-
-
-cw(ADD,     EMIT,   "EMIT"   );/* A -- */
-cw(EMIT,    KEY,    "KEY"    );/* -- A */
-
-const cell LAST_C_WORD[] = { (cell) KEY, (cell) "" };
-
-const cell * const last_c_word = KEY;
-
-fw(0, STAR, "STAR") l_ 42 _ EMIT __;
-
-static void emit(int c) { putchar(c); }
-
-int main(int arc, char *argv[])
+int main(/* int args, char *argv[] */)
 {
-    sys_t   sys = { &getchar, &emit };
+    sys_t   sys = { &getchar, &myemit };
     cell    mem[100];
-    forth_t f = { STAR + 3, mem + 100, mem + 50, mem, 100, sys };
+    cell    *STAR = CP(last_forth_rom_word);
 
-//     word_dump(STAR + 2);
+    forth_t f = { STAR + 3, CP(mem + 100), CP(mem + 50), CP(mem), 100, sys };
+
+    check();
+
+    /* printf("Hi Forth!\n"); */
+    word_dump(STAR + 2);
     do_colon(&f);
 
     return EXIT_SUCCESS;

@@ -15,7 +15,8 @@ fw(DEC1,        INC2,       "2+"        ) 0 __;
 fw(INC2,        DEC2,       "2-"        ) 0 __;
 fw(DEC2,        DOUBLE,     "2*"        ) /* A -- 2*A */
     DUP _ ADD __;
-fw(DOUBLE,      HALF,       "2/"        ) 0 __;
+fw(DOUBLE,      HALF,       "2/"        ) /* A -- A/2 */
+    l_ 2 _ DIV __;
 fw(HALF,        ABS,        "ABS"       ) 0 __;
 fw(ABS,         NEGATE,     "NEGATE"    ) 0 __;
 
@@ -42,8 +43,8 @@ fw(TEXT,        COUNT,      "COUNT"     ) 0 __;
 
 /* CHARACTER OUTPUT */
 
-fw(COUNT,       CR,         "CR"        ) 0 __;
-fw(CR,          SPACE,      "SPACE"     ) 0 __;
+fw(COUNT,       CR,         "CR"        ) l_'\r' _ EMIT __;
+fw(CR,          SPACE,      "SPACE"     ) l_ ' ' _ EMIT __;
 fw(SPACE,       SPACES,     "SPACES"    ) 0 __;
 //fw(UMUL,        UDIVMOD,    "EMIT"      ) 0 __;
 fw(SPACES,      DOTDQUOTE,  ".\""       ) 0 __;
@@ -57,8 +58,8 @@ fw(GTTYPE,      DTRAILING,  "-TRAILING" ) 0 __;
 /* Single-length */
 
 fw(DTRAILING,   EQ,         "="         ) 0 __;
-fw(EQ,          MINUS,      "-"         ) 0 __;
-fw(MINUS,       LT,         "<"         ) 0 __;
+//fw(EQ,          MINUS,      "-"         ) 0 __;
+fw(EQ,          LT,         "<"         ) 0 __;
 fw(LT,          ULT,        "U<"        ) 0 __;
 fw(ULT,         GT,         ">"         ) 0 __;
 fw(GT,          IS_ZERO,    "0="        ) 0 __;

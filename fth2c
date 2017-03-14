@@ -1,0 +1,158 @@
+#! /usr/bin/python3
+# -*- python -*-
+
+import sys
+
+EOL = False
+
+class Mem:
+    """Implements Forth memory"""
+
+    def __init__(self):
+        self.mem = {}
+
+    def __getitem__(self, index):
+        return self.mem[index]
+
+    def __setitem__(self, index, value):
+        self.mem[index] = value
+
+    def dump(self):
+        def say(s):      print(s, end='')
+        def nl():        say("\n")
+        def indent():    say("    ");
+
+        say("const cell forth_rom[] = {")
+        nl()
+
+        prev_i = -1
+        for i in sorted(self.mem.keys()):
+            assert i == prev_i + 1, "%d does not follow %d" % (i, prev_i)
+            print("    (cell) (%s)," % self.mem[i])
+            prev_i = i
+        say('};')
+        nl()
+
+#-----------------------------------------------------------------------------
+def error(msg):
+    sys.stdout.flush()
+    print("\nERROR: ", msg, file=sys.stderr, flush=True)
+    exit(1)
+
+#-----------------------------------------------------------------------------
+def get_next_character_(f):
+    """Reads one character from the given textfile"""
+    while True:
+        c = f.read(1)
+        if c:
+            yield c
+        else:
+            break
+    yield EOL
+
+#-----------------------------------------------------------------------------
+def lex(file):
+    """Split file in tokens, a token being a sequence of non space chars
+    or a newline"""
+
+    token = ""
+    try:
+        with open(file, 'rt', encoding="utf-8") as f:
+            for c in get_next_character_(f):
+                # print("p> '%s' (\"%s\")" % (c, token))
+                if EOL == c or c.isspace():
+                    if token != '':
+                        yield token
+                        token = ''
+                    if c == '\n':
+                        yield c
+                else:
+                   token += c
+
+    except FileNotFoundError:
+        error('Error opening file "%s": File not found' % file)
+
+#-----------------------------------------------------------------------------
+def parse(tokens):
+    """Join tokens into functions while skipping comments"""
+
+    status = 'code'
+
+    fn = []
+    for tk in tokens:
+        # print("p> ", tk)
+        if status == 'code':
+            if tk == '(' :
+                status = 'in parent comment'
+            elif tk == '\\':
+                status = 'in backslash comment'
+            elif tk != '\n':
+                fn += [tk]
+                if tk == ';':
+                    yield fn
+                    fn = []
+        elif ((status == 'in parent comment' and tk == ')')
+               or (status == 'in backslash comment' and tk == '\n')):
+            status = 'code'
+
+#-----------------------------------------------------------------------------
+def compile(forth_rom, functions):
+    offset = 0
+
+    def cell(value):
+        nonlocal offset, forth_rom
+
+        forth_rom[offset] = value
+        offset = offset + 1
+
+    def word(w):     cell("forth_rom + %s" % (words[w] + 2))
+
+    previous_word = 'NULL';
+    words = {}
+
+    for fn in functions:
+        w_name    = fn[1]
+        w_offset  = offset
+
+        words[w_name] = offset
+
+        cell(previous_word)
+        cell('"%s"' % w_name)
+
+        if fn[0] == 'c:':
+            w_codeword = fn[2]
+            del fn[2]
+        else:
+            w_codeword = 'do_colon'
+
+        cell("&" + w_codeword)
+        for w in fn[2:]:
+            if w == ';':
+                cell(0)                 # EXIT
+            elif w in words:
+                word(w)
+            else:
+                try:
+                    val = int(w)
+                except ValueError:
+                    error('"%s" is neither a known word nor a valid number' % w)
+                word('LITERAL')
+                cell(val)
+        previous_word = "forth_rom + %s" % w_offset
+    return previous_word
+
+#-----------------------------------------------------------------------------
+def usage():
+    exit(1)
+
+#-----------------------------------------------------------------------------
+def main():
+    forth_rom = Mem()
+    args = sys.argv[1:]
+    for file in args: last_word = compile(forth_rom, parse(lex(file)))
+    forth_rom.dump()
+    print("const cell last_forth_rom_word = (cell) (%s);" % last_word);
+
+#-----------------------------------------------------------------------------
+if __name__ == '__main__':
+    main()
