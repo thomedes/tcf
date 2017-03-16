@@ -23,6 +23,9 @@ typedef struct forth_s {
     sys_t   sys;
 } forth_t;
 
+#define PSP_BASE CP(f->mem + 100)
+#define RSP_BASE CP(f->mem +  50)
+
 #define WPREV(p)    ((p)[0])
 #define WNAME(p)    ((p)[1])
 #define WCODE(p)    ((p)[2])
@@ -44,49 +47,99 @@ typedef struct forth_s {
 
 void forth_dump(const forth_t *f);
 
-static void dup     (forth_t *f) { --PSP; TOP = PSP[1]; RETURN }
-static void drop    (forth_t *f) { ++PSP; RETURN }
-static void swap    (forth_t *f) { cell c = TOP; TOP = PSP[1]; PSP[1] = c; RETURN }
-static void over    (forth_t *f) { --PSP; TOP = PSP[2]; RETURN }
+static void mem     (forth_t *f) { --PSP; TOP = (cell) f->mem; RETURN; }
+static void memsiz  (forth_t *f) {
+    --PSP;
+    TOP = sizeof f->mem_cells * sizeof (cell);
+    RETURN;
+}
+static void spfetch (forth_t *f) { --PSP; TOP = (cell) (PSP + 1); RETURN; }
+
+static void dup     (forth_t *f) { --PSP; TOP = PSP[1]; RETURN; }
+static void drop    (forth_t *f) { ++PSP; RETURN; }
+static void swap    (forth_t *f) { cell c = TOP; TOP = PSP[1]; PSP[1] = c; RETURN; }
+static void over    (forth_t *f) { --PSP; TOP = PSP[2]; RETURN; }
+static void rot     (forth_t *f) { /* ( x1 x2 x3 -- x2 x3 x1 ) */
+    cell tmp = PSP[2];
+    PSP[2] = PSP[1];
+    PSP[1] = TOP;
+    TOP = tmp;
+    RETURN;
+}
+static void nrot    (forth_t *f) { /* ( x1 x2 x3 -- x3 x1 x2 ) */
+    cell tmp = TOP;
+    TOP = PSP[1];
+    PSP[1] = PSP[2];
+    PSP[2] = tmp;
+    RETURN;
+}
+static void pick    (forth_t *f) { TOP = PSP[TOP]; RETURN; }
+static void roll    (forth_t *f) {
+    cell tmp = PSP[TOP];
+    for (; TOP; --TOP) {
+        PSP[TOP] = PSP[TOP-1];
+    }
+    TOP = tmp;
+}
 
 static void literal (forth_t *f) { IP = (cell *) RPOP; PUSH(*IP++); }
 
-static void add     (forth_t *f) { PSP[1] += TOP; ++PSP; RETURN }
-static void sub     (forth_t *f) { PSP[1] -= TOP; ++PSP; RETURN }
-static void mul     (forth_t *f) { PSP[1] *= TOP; ++PSP; RETURN }
-static void div_    (forth_t *f) { PSP[1] /= TOP; ++PSP; RETURN }
-static void mod     (forth_t *f) { PSP[1] %= TOP; ++PSP; RETURN }
+static void add     (forth_t *f) { PSP[1] += TOP; ++PSP; RETURN; }
+static void sub     (forth_t *f) { PSP[1] -= TOP; ++PSP; RETURN; }
+static void mul     (forth_t *f) { PSP[1] *= TOP; ++PSP; RETURN; }
+static void divmod  (forth_t *f) {
+    cell tmp = PSP[1];
+    PSP[1] = tmp % TOP;
+    TOP    = tmp / TOP;
+    RETURN;
+}
+static void muldivmod  (forth_t *f) {
+    dcell num = (dcell) PSP[2] * PSP[1];
+    PSP[2] = num / TOP;
+    PSP[1] = num % TOP;
+    ++PSP;
+    RETURN;
+}
 
-static void emit    (forth_t *f) { (*f->sys.emit)(POP); RETURN }
-static void key     (forth_t *f) { PUSH((*f->sys.key)()); RETURN }
+static void isnot0  (forth_t *f) { TOP = TOP ? -1 : 0; RETURN; }
+static void lt      (forth_t *f) {
+    PSP[1] = PSP[1] < TOP ? -1 : 0;
+    ++PSP;
+    RETURN;
+}
 
-static void eq      (forth_t *f) { PSP[1] = PSP[1] == TOP ? -1 : 0; RETURN }
+static void invert  (forth_t *f) { TOP = ~TOP; RETURN; }
+static void and     (forth_t *f) { PSP[1] &= TOP; ++PSP; RETURN; }
+static void or      (forth_t *f) { PSP[1] |= TOP; ++PSP; RETURN; }
+static void xor     (forth_t *f) { PSP[1] ^= TOP; ++PSP; RETURN; }
 
-static void cells   (forth_t *f) { TOP *= sizeof (cell); RETURN }
+static void store   (forth_t *f) {
+    *(cell *) TOP = PSP[1];
+    PSP += 2;
+    RETURN;
+}
+static void fetch   (forth_t *f) { TOP = * (cell *) TOP; RETURN; }
+static void cstore  (forth_t *f) {
+    *(unsigned char *) TOP = (unsigned char) PSP[1];
+    PSP += 2;
+    RETURN;
+}
+static void cfetch  (forth_t *f) {
+    TOP = (cell) *((unsigned char *) TOP);
+    RETURN;
+}
+
+static void emit    (forth_t *f) { (*f->sys.emit)(POP); RETURN; }
+static void key     (forth_t *f) { PUSH((*f->sys.key)()); RETURN; }
+
+static void cells   (forth_t *f) { TOP *= sizeof (cell); RETURN; }
 
 
 static const char *word_name(const cell *code) {
-    return (const char *) (code[-1]);
+    return code ? (const char *) (code[-1]) : "(nil)";
 }
 
-void do_colon(forth_t *f)
-{
-    /* printf("do_colon(%p)\n", f); */
-    /* fflush(stdout); */
-#if 1
-    /* printf("do_colon %s\n", word_name(IP - 1)); */
-    while (*IP) {
-        RPUSH(IP + 1);
-        IP = (cell *) *IP;
-        /* printf("--> %s\n", word_name(IP)); */
-
-        (**(forth_fn *) *IP++)(f);
-    }
-#endif
-}
-
-#include "output/tcf-rom.c"
-
+void do_colon(forth_t *f);
 
 void word_dump(const cell *code)
 {
@@ -110,16 +163,45 @@ void word_dump(const cell *code)
     printf(";\n");
 }
 
+const cell forth_rom[];
+
 void forth_dump(const forth_t *f)
 {
-    printf("f: { IP: %p - %20ld, PSP: %20ld, RSP: %20ld }\n",
-           (void *) f->ip, (long) (f->ip  - f->mem),
+    printf("f: { IP: %s, PSP: %4ld, RSP: %4ld }\n",
+           word_name(IP),
+           /* (void *) f->ip, (long) (f->ip  - forth_rom), */
            (long) (f->psp - f->mem),
            (long) (f->rsp - f->mem));
     /* word_dump(f->ip); */
 }
 
-static void myemit(int c) { putchar(c); }
+void do_colon(forth_t *f)
+{
+    /* printf("do_colon(%s)\n", word_name(IP - 1)); */
+#if 1
+    while (*IP) {
+        cell * const callee = (cell *) *IP;
+        forth_fn * const callee_fn = (forth_fn *) callee[0];
+        cell * const callee_data = (cell *) callee + 1;
+        const cell * const next_ip = IP + 1;
+
+        /* printf("{ calling %s\n", word_name(callee)); */
+
+        RPUSH(next_ip);
+        IP = callee_data;
+        /* printf("--> %s\n", word_name(IP)); */
+
+        (*callee_fn)(f);
+
+        /* printf("} next is %s\n", word_name((cell *) *IP)); */
+    }
+    RETURN;
+#endif
+}
+
+#include "output/tcf-rom.c"
+
+static void myemit(int c) { putchar(c); fflush(stdout); }
 
 static void check(void) {
 #if 0
@@ -151,14 +233,14 @@ int main(/* int args, char *argv[] */)
 {
     sys_t   sys = { &getchar, &myemit };
     cell    mem[100];
-    cell    *STAR = CP(last_forth_rom_word);
+    cell    *LATEST = CP(forth_rom_latest);
 
-    forth_t f = { STAR + 3, CP(mem + 100), CP(mem + 50), CP(mem), 100, sys };
+    forth_t f = { LATEST + 3, CP(mem + 100), CP(mem + 50), CP(mem), 100, sys };
 
     check();
 
     /* printf("Hi Forth!\n"); */
-    word_dump(STAR + 2);
+    /* word_dump(LATEST + 2); */
     do_colon(&f);
 
     return EXIT_SUCCESS;
