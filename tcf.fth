@@ -1,8 +1,10 @@
-c: _MEM     mem ;       ( -- a-addr ) \ Return address of writable memory start
-c: _#MEM    memsiz ;    ( -- u )      \ Return size of writable memory
+c: _MEM     mem ;       ( -- a-addr ) \ Return address of RAM start
+c: _#MEM    memsiz ;    ( -- u )      \ Return size of RAM memory
+
+c: DOCOL    do_colon ;
 
 \ Return the address of the top of the stack before SP@ is executed.
-c: SP@      spfetch ;   ( -- a-addr )
+c: PSP      pspa ;      ( -- a-addr )
 
 c: DUP      dup ;       ( x -- x x )
 c: DROP     drop ;      ( x -- )
@@ -41,6 +43,8 @@ c: KEY      key ;       ( -- char )
 c: CELLS    cells ;     ( n1 -- n2 )
 
 c: LITERAL  literal ;
+c: BRANCH   branch ;
+c: 0BRANCH  zbranch ;
 
 \ *****************************************************************************
 
@@ -49,36 +53,48 @@ c: LITERAL  literal ;
 \   SYSTEM & USER VARIABLES
 \ *****************************************************************************
 
-: CP _MEM ;
+: CP    _MEM 0 + ;
+: SP0   _MEM 1 + ;
+
 : HERE CP @ ;           ( -- addr )
-: PAD HERE 20 CELLS + ;
+\ : PAD HERE 20 CELLS + ;
 : TIB ;
+: LATEST ;
+
 
 \ *****************************************************************************
 \   STACK MANIPULATION
 \ *****************************************************************************
 
+: SP@   PSP  @ ;        ( -- a-addr )
+: SP!   PSP  ! ;        ( a-addr -- )
+
+\ Duplicate top of stack if non zero
+: ?DUP  DUP IF DUP THEN ; ( x -- x (x) )
+: R> ;
+: R@ ;
+: DEPTH SP@ SP0 - ;
+
 : 2DROP DROP DROP ;     ( x1 x2 -- )
 : 2DUP  OVER OVER ;     ( x1 x2 -- x1 x2 x1 x2 )
 : 2SWAP 4 ROLL 4 ROLL ; ( x1 x2 x3 x4 -- x3 x4 x1 x2 )
-
-\ Duplicate top of stack if non zero
-\ : ?DUP
 
 \ *****************************************************************************
 \   COMPARISON
 \ *****************************************************************************
 
-: 0=    0<> INVERT ;       ( x1 -- flag )
+: 0=    0<> INVERT ;    ( x1 -- flag )   \ Corresponds to logical negation
 : =     - 0= ;          ( x1 x2 -- flag )
 : <>    - 0<> ;         ( x1 x2 -- flag )
 : >     SWAP < ;        ( x1 x2 -- flag )
-: <=    > 0= ;         ( x1 x2 -- flag )
-: >=    < 0= ;         ( x1 x2 -- flag )
+: <=    > 0= ;          ( x1 x2 -- flag )
+: >=    < 0= ;          ( x1 x2 -- flag )
 : 0<    0 < ;           ( x1 -- flag )
 : 0>    0 > ;           ( x1 -- flag )
 : 0<=   0 <= ;          ( x1 -- flag )
 : 0>=   0 >= ;          ( x1 -- flag )
+: U< ;
+\ : NOT 0= ;              ( flag -- ¬flag )
 
 \ *****************************************************************************
 \   ARITHMETICAL AND LOGICAL
@@ -95,7 +111,13 @@ c: LITERAL  literal ;
 \: 4+    4 + ;
 \: 4-    4 - ;
 
+: 2* DUP + ;
+
 : NEGATE -1 * ;
+
+: MAX 2DUP > IF SWAP THEN DROP ;
+: MIN 2DUP < IF SWAP THEN DROP ;
+: ABS DUP 0< IF NEGATE THEN ;
 
 \ *****************************************************************************
 \   MEMORY
@@ -147,27 +169,30 @@ c: LITERAL  literal ;
 
 
 \ *****************************************************************************
-\   DEFINING WORDS
-\ *****************************************************************************
-
-\ : : ;
-\ : ; ;
-\ : VARIABLE ;
-\ ; CONSTANT ;
-
-
-\ *****************************************************************************
 \   COMPILER
 \ *****************************************************************************
 
 : ALLOT CP +! ;         ( n -- )
 : ,     HERE 1 CELLS ALLOT ! ; ( x -- )
-\ : IMMEDIATE
-\ : STATE
-\ : [
-\ : ]
+: IMMEDIATE ;
+: STATE ;
+: [  0 STATE ! ;
+: ] -1 STATE ! ;
 \ : COMPILE
 \ : [COMPILE]
+
+\ *****************************************************************************
+\   DEFINING WORDS
+\ *****************************************************************************
+
+: ' ;
+: HIDDEN ;
+: WORD ;
+: CREATE ;
+: : WORD CREATE ' DOCOL , LATEST @ HIDDEN [ ;
+: ; 0 , LATEST @ HIDDEN ] ;
+: VARIABLE ;
+; CONSTANT ;
 
 \ *****************************************************************************
 \   MISCELLANEOUS
@@ -177,18 +202,25 @@ c: LITERAL  literal ;
 \ : >IN
 \ : BLK
 \ : ABORT
-\ : QUIT
 
-
-\ : MAX TODO ;
-\ : MIN TODO ;
-\ : ABS TODO ;
-
-\ : -ROT TODO ; (
-
-: /MOD OVER OVER MOD -ROT / ; ( n1 n2 -- REM QUOT )
-
-: 2* DUP + ;
+: IF IMMEDIATE ;
+: ELSE IMMEDIATE ;
+: THEN IMMEDIATE ;
 
 : STAR 42 EMIT ;
-: STARS STAR STAR STAR CR ;
+: STARS STAR STAR STAR STAR STAR STAR STAR STAR CR ;
+
+: INTERPRET
+    STAR
+    \ WORD
+    \ ' IF
+    \ ELSE
+    \  \   _NUMBER IF
+    \     ELSE
+    \     THEN
+    \ THEN
+;
+
+\ This MUST be the last word as this is the word that will be executed
+\ when Forth starts.
+: QUIT ( R0 RSP! ) BEGIN INTERPRET 0 UNTIL ;

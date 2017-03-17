@@ -53,7 +53,7 @@ static void memsiz  (forth_t *f) {
     TOP = sizeof f->mem_cells * sizeof (cell);
     RETURN;
 }
-static void spfetch (forth_t *f) { --PSP; TOP = (cell) (PSP + 1); RETURN; }
+static void pspa    (forth_t *f) { --PSP; TOP = (cell) &PSP; RETURN; }
 
 static void dup     (forth_t *f) { --PSP; TOP = PSP[1]; RETURN; }
 static void drop    (forth_t *f) { ++PSP; RETURN; }
@@ -83,6 +83,8 @@ static void roll    (forth_t *f) {
 }
 
 static void literal (forth_t *f) { IP = (cell *) RPOP; PUSH(*IP++); }
+static void branch  (forth_t *f) { IP = (cell *) RPOP; IP += *IP; }
+static void zbranch (forth_t *f) { if (!POP) { branch(f); } }
 
 static void add     (forth_t *f) { PSP[1] += TOP; ++PSP; RETURN; }
 static void sub     (forth_t *f) { PSP[1] -= TOP; ++PSP; RETURN; }
@@ -201,7 +203,7 @@ void do_colon(forth_t *f)
 
 #include "output/tcf-rom.c"
 
-static void myemit(int c) { putchar(c); fflush(stdout); }
+static void myemit(int c) { putchar(c); }
 
 static void check(void) {
 #if 0

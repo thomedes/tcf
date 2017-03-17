@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-typedef intptr_t cell;
+typedef intptr_t cell;          /* cell MUST be signed */
 typedef long long int dcell;    /* Double precission cell */
 
 struct forth_s;

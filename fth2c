@@ -1,5 +1,6 @@
 #! /usr/bin/python3
 # -*- python -*-
+"""Forth precompiler. Outputs a rom image in C format"""
 
 import sys
 
@@ -85,7 +86,7 @@ def parse(tokens):
                 status = 'in backslash comment'
             elif tk != '\n':
                 fn += [tk]
-                if tk == ';':
+                if tk == ';' and len(fn) > 2 :
                     yield fn
                     fn = []
         elif ((status == 'in parent comment' and tk == ')')
@@ -93,31 +94,68 @@ def parse(tokens):
             status = 'code'
 
 #-----------------------------------------------------------------------------
-def compile(functions):
+def bytes2cell(bytes, endiannes):
+    assert endiannes in ['big-endian', 'little-endian'];
+    if endiannes == 'little-endian': bytes = reversed(bytes)
+    return '0x' + ''.join(["%02X" % b for b in bytes])
+
+#-----------------------------------------------------------------------------
+def str2cells(str, cell_size, endiannes, with_length):
+    if with_length:
+        l = len(str)  # Do it in two steps to avoid problems
+        str = chr(l) + str
+    cells = []
+    while str:
+        bytes = ([ord(c) for c in str] + [0] * cell_size)[0:cell_size]
+        cells.append(bytes2cell(bytes, endiannes))
+        str = str[cell_size:]
+    return cells
+
+#-----------------------------------------------------------------------------
+def compile(cell_size, endiannes, functions):
     here = 0
 
-    def cell(value):
+    def mkcomment(s):
+        return '/* %-5s */' % s.replace('*/', '* /')
+
+    def cell(value, comment = None):
         nonlocal here
 
-        print("    (cell) (%s)," % value)
+        if comment:
+            print("    (cell) (%-18s), %s" % (value, mkcomment(comment)))
+        else:
+            print("    (cell) (%-18s)," % value)
         here = here + 1
 
-    def word(w):     cell("forth_rom + %s" % (words[w] + 2))
+    def word(w):
+        assert w in words
+        cell("forth_rom + %3s" % words[w]['cfa'], w)
 
     previous_word = 'NULL';
     words = {}
 
     print("const cell forth_rom[] = {");
     for fn in functions:
-        print(fn, file=sys.stderr)
+        assert len(fn) > 2, "Invalid fn: %s" % fn
+
+        begins = []
+
+        # print(fn, file=sys.stderr)
         w_name    = fn[1]
         w_offset  = here
 
-        words[w_name] = here
+        if w_name in words: error('Duplicate word "%s"' % w_name)
+        words[w_name] = { "start": here }
 
+        print('\n    %s\n' % mkcomment(w_name))
         cell(previous_word)
-        cell('"%s"' % w_name)
+#        cell('"%s"' % w_name)
+        name_cells = str2cells(w_name, cell_size, endiannes, True)
+        for c in name_cells: cell(c)
 
+        # codeword (and save cfa)
+
+        words[w_name]['cfa'] = here
         if fn[0] == 'c:':
             w_codeword = fn[2]
             del fn[2]
@@ -125,9 +163,30 @@ def compile(functions):
             w_codeword = 'do_colon'
 
         cell("&" + w_codeword)
+        next_is_literal = False
         for w in fn[2:]:
-            if w == ';':
-                cell(0)                 # EXIT
+            if next_is_literal:
+                cell(w, str(w))
+                next_is_literal = False
+            elif w == ';':
+                cell(0, "EXIT")                 # EXIT
+            elif w == 'BEGIN':
+                begins.append(here)
+                print("begins: %s" % begins, file=sys.stderr)
+            elif w == 'UNTIL':
+                assert len(begins) > 0
+                word('0BRANCH')
+                cell(begins[-1] - here)
+                del begins[-1]
+            elif w == 'BRANCH':
+                word(w)
+                next_is_literal = True
+            elif w == 'IF':
+                pass
+            elif w == 'ELSE':
+                pass
+            elif w == 'THEN':
+                pass
             elif w in words:
                 word(w)
             else:
@@ -137,9 +196,11 @@ def compile(functions):
                     print('words: ', sorted(words.keys()), file=sys.stderr)
                     error('"%s" is neither a known word nor a valid number' % w)
                 word('LITERAL')
-                cell(val)
+                cell(val, str(val))
+        assert len(begins) == 0
         previous_word = "forth_rom + %s" % w_offset
     print("};");
+    print(mkcomment('ROM SIZE: %d cells, %d bytes' % (here, 4 * here)))
     return previous_word
 
 #-----------------------------------------------------------------------------
@@ -148,7 +209,16 @@ def usage():
 
 #-----------------------------------------------------------------------------
 def main():
-    latest = compile(parse(lex(sys.argv[1])))
+    bits = int(sys.argv[1])
+    assert bits in [16, 32, 64]
+    cell_size = bits // 8
+
+    endiannes = sys.argv[2]
+    assert endiannes in ['big-endian', 'little-endian'];
+
+    file = sys.argv[3]
+
+    latest = compile(cell_size, endiannes, parse(lex(file)))
     print("const cell forth_rom_latest = (cell) (%s);" % latest);
 
 #-----------------------------------------------------------------------------

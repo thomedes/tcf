@@ -14,7 +14,7 @@ clean:
 
 $(OUTPUT)tcf-rom.c: tcf.fth fth2c
 	mkdir -p $(OUTPUT)
-	./fth2c $< > $@
+	./fth2c 64 little-endian $< > $@
 
 $(OUTPUT)tcf: tcf.c $(OUTPUT)tcf-rom.c
 	mkdir -p $(OUTPUT)
