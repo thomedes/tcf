@@ -47,6 +47,12 @@ typedef struct forth_s {
 
 void forth_dump(const forth_t *f);
 
+void error(const char *s) {
+    fputs(s, stderr);
+    exit(1);
+}
+
+
 static void mem     (forth_t *f) { --PSP; TOP = (cell) f->mem; RETURN; }
 static void memsiz  (forth_t *f) {
     --PSP;
@@ -115,12 +121,22 @@ static void and     (forth_t *f) { PSP[1] &= TOP; ++PSP; RETURN; }
 static void or      (forth_t *f) { PSP[1] |= TOP; ++PSP; RETURN; }
 static void xor     (forth_t *f) { PSP[1] ^= TOP; ++PSP; RETURN; }
 
+static int a_addr(cell c) { return 0 == (c % sizeof (cell)); }
+
 static void store   (forth_t *f) {
+    if (!a_addr(TOP)) {
+        error("!: missaligned store");
+    }
     *(cell *) TOP = PSP[1];
     PSP += 2;
     RETURN;
 }
-static void fetch   (forth_t *f) { TOP = * (cell *) TOP; RETURN; }
+static void fetch   (forth_t *f) {
+    if (!a_addr(TOP)) {
+        error("@: missaligned read");
+    }
+    TOP = * (cell *) TOP; RETURN;
+}
 static void cstore  (forth_t *f) {
     *(unsigned char *) TOP = (unsigned char) PSP[1];
     PSP += 2;

@@ -53,8 +53,9 @@ c: 0BRANCH  zbranch ;
 \   SYSTEM & USER VARIABLES
 \ *****************************************************************************
 
-: CP    _MEM 0 + ;
-: SP0   _MEM 1 + ;
+: CP    _MEM 0 CELLS + ;
+: SP0   _MEM 1 CELLS + ;
+: BASE  _MEM 2 CELLS + ;
 
 : HERE CP @ ;           ( -- addr )
 \ : PAD HERE 20 CELLS + ;
@@ -224,3 +225,11 @@ c: 0BRANCH  zbranch ;
 \ This MUST be the last word as this is the word that will be executed
 \ when Forth starts.
 : QUIT ( R0 RSP! ) BEGIN INTERPRET 0 UNTIL ;
+
+: _INIT
+    \ Init variables
+    10 BASE !
+
+    \ Enter main loop
+    QUIT
+;
