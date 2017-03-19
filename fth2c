@@ -2,7 +2,7 @@
 # -*- python -*-
 """Forth precompiler. Outputs a rom image in C format"""
 
-import sys
+import re, sys
 
 EOL = False
 
@@ -114,17 +114,20 @@ def str2cells(str, cell_size, endiannes, with_length):
 #-----------------------------------------------------------------------------
 def compile(cell_size, endiannes, functions):
     here = 0
+    rom = []
 
     def mkcomment(s):
         return '/* %-5s */' % s.replace('*/', '* /')
 
+    def cell_build(value, comment = None):
+        if comment:
+            return "    (cell) (%-18s), %s" % (value, mkcomment(comment))
+        else:
+            return "    (cell) (%-18s)," % value
+
     def cell(value, comment = None):
         nonlocal here
-
-        if comment:
-            print("    (cell) (%-18s), %s" % (value, mkcomment(comment)))
-        else:
-            print("    (cell) (%-18s)," % value)
+        rom.append(cell_build(value, comment))
         here = here + 1
 
     def word(w):
@@ -133,6 +136,7 @@ def compile(cell_size, endiannes, functions):
 
     previous_word = 'NULL';
     words = {}
+    stack = []
 
     print("const cell forth_rom[] = {");
     for fn in functions:
@@ -147,8 +151,8 @@ def compile(cell_size, endiannes, functions):
         if w_name in words: error('Duplicate word "%s"' % w_name)
         words[w_name] = { "start": here }
 
-        print('\n    %s\n' % mkcomment(w_name))
         cell(previous_word)
+        rom[-1] = '\n    %s\n' % mkcomment(w_name) + rom[-1]
 #        cell('"%s"' % w_name)
         name_cells = str2cells(w_name, cell_size, endiannes, True)
         for c in name_cells: cell(c)
@@ -163,30 +167,45 @@ def compile(cell_size, endiannes, functions):
             w_codeword = 'do_colon'
 
         cell("&" + w_codeword)
-        next_is_literal = False
+        next_is_literal = next_is_char = False
         for w in fn[2:]:
             if next_is_literal:
                 cell(w, str(w))
                 next_is_literal = False
+            elif next_is_char:
+                cell("'%s'" % w[0])
+                next_is_char = False
             elif w == ';':
                 cell(0, "EXIT")                 # EXIT
+            elif w == 'CHAR':
+                word('LITERAL')
+                next_is_char = True
             elif w == 'BEGIN':
                 begins.append(here)
                 print("begins: %s" % begins, file=sys.stderr)
+            elif w == 'AGAIN':
+                assert len(begins) > 0
+                word('BRANCH')
+                cell(begins[-1] - here)
+                del begins[-1]
             elif w == 'UNTIL':
                 assert len(begins) > 0
                 word('0BRANCH')
                 cell(begins[-1] - here)
                 del begins[-1]
-            elif w == 'BRANCH':
-                word(w)
-                next_is_literal = True
             elif w == 'IF':
-                pass
+                word('0BRANCH')
+                stack.append(here)
+                cell(0)
             elif w == 'ELSE':
                 pass
             elif w == 'THEN':
-                pass
+                if_offset_addr = stack[-1]
+                del(stack[-1])
+                rom[if_offset_addr] = cell_build(here - if_offset_addr)
+            elif w == 'BRANCH':
+                word(w)
+                next_is_literal = True
             elif w in words:
                 word(w)
             else:
@@ -199,6 +218,7 @@ def compile(cell_size, endiannes, functions):
                 cell(val, str(val))
         assert len(begins) == 0
         previous_word = "forth_rom + %s" % w_offset
+    for cell in rom: print(cell)
     print("};");
     print(mkcomment('ROM SIZE: %d cells, %d bytes' % (here, 4 * here)))
     return previous_word

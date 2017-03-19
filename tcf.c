@@ -89,8 +89,16 @@ static void roll    (forth_t *f) {
 }
 
 static void literal (forth_t *f) { IP = (cell *) RPOP; PUSH(*IP++); }
-static void branch  (forth_t *f) { IP = (cell *) RPOP; IP += *IP; }
-static void zbranch (forth_t *f) { if (!POP) { branch(f); } }
+
+static void branch  (forth_t *f) {
+    IP = (cell *) RPOP;
+    IP += *IP;
+}
+
+static void zbranch (forth_t *f) {
+    IP = (cell *) RPOP;
+    IP += POP ? 1 : *IP;
+}
 
 static void add     (forth_t *f) { PSP[1] += TOP; ++PSP; RETURN; }
 static void sub     (forth_t *f) { PSP[1] -= TOP; ++PSP; RETURN; }
@@ -203,6 +211,7 @@ void do_colon(forth_t *f)
         cell * const callee_data = (cell *) callee + 1;
         const cell * const next_ip = IP + 1;
 
+        /* printf("IP: %ld\n", IP - forth_rom); */
         /* printf("{ calling %s\n", word_name(callee)); */
 
         RPUSH(next_ip);

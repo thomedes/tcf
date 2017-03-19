@@ -95,7 +95,7 @@ c: 0BRANCH  zbranch ;
 : 0<=   0 <= ;          ( x1 -- flag )
 : 0>=   0 >= ;          ( x1 -- flag )
 : U< ;
-\ : NOT 0= ;              ( flag -- ¬flag )
+: NOT 0= ;              ( flag -- ¬flag )
 
 \ *****************************************************************************
 \   ARITHMETICAL AND LOGICAL
@@ -141,8 +141,10 @@ c: 0BRANCH  zbranch ;
 : BL   32 ;
 : CR   10 EMIT ;
 : SPACE BL EMIT ;
-\ : SPACES  ;
-\ : TYPE ;
+
+: SPACES ?DUP IF BEGIN SPACE 1- DUP 0= UNTIL DROP THEN ;
+
+: TYPE ;
 \ : COUNT ;
 \ : -TRAILING ;
 \ : EXPECT ;
@@ -153,16 +155,16 @@ c: 0BRANCH  zbranch ;
 \ *****************************************************************************
 
 \ : BASE ;
-\ : DECIMAL 10 BASE ! ;
-\ : . ;
-\ : U. ;
+: DECIMAL 10 BASE ! ;
 \ : CONVERT ;
-\ : <# ;
+: <# ;
 \ : #
-\ : #S
-\ : HOLD ;
-\ : SIGN ;
-\ : #> ;
+: #S ;
+: HOLD ;
+: SIGN ( n -- ) 0< IF CHAR - HOLD THEN ;
+: #> ;
+: . ( n -- )  DUP ABS 0 <# #S ROT SIGN #> TYPE SPACE ;
+: U. ;
 
 \ *****************************************************************************
 \   MASS STORAGE INPUT-OUTPUT
@@ -173,6 +175,10 @@ c: 0BRANCH  zbranch ;
 \   COMPILER
 \ *****************************************************************************
 
+: WORD ;
+: ' ;
+: >CFA 1+ DUP @ 31 AND 1 CELLS / + ;
+: >DFA >CFA 1+ ;
 : ALLOT CP +! ;         ( n -- )
 : ,     HERE 1 CELLS ALLOT ! ; ( x -- )
 : IMMEDIATE ;
@@ -180,15 +186,14 @@ c: 0BRANCH  zbranch ;
 : [  0 STATE ! ;
 : ] -1 STATE ! ;
 \ : COMPILE
-\ : [COMPILE]
+\ Compile next word even if immediate
+: [COMPILE] IMMEDIATE WORD ' >CFA , ;
 
 \ *****************************************************************************
 \   DEFINING WORDS
 \ *****************************************************************************
 
-: ' ;
 : HIDDEN ;
-: WORD ;
 : CREATE ;
 : : WORD CREATE ' DOCOL , LATEST @ HIDDEN [ ;
 : ; 0 , LATEST @ HIDDEN ] ;
@@ -224,12 +229,14 @@ c: 0BRANCH  zbranch ;
 
 \ This MUST be the last word as this is the word that will be executed
 \ when Forth starts.
-: QUIT ( R0 RSP! ) BEGIN INTERPRET 0 UNTIL ;
+: QUIT ( R0 RSP! ) BEGIN INTERPRET AGAIN ;
 
 : _INIT
     \ Init variables
-    10 BASE !
+    DECIMAL
+
+    CHAR * . CR
 
     \ Enter main loop
-    QUIT
+    \ QUIT
 ;
